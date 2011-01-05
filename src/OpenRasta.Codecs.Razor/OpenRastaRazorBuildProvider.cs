@@ -8,8 +8,10 @@ using System.Linq;
 using System.Security;
 using System.Web;
 using System.Web.Compilation;
+using System.Web.Hosting;
 using System.Web.Razor;
 using System.Web.Razor.Generator;
+using System.Web.Razor.Parser;
 using System.Web.Razor.Parser.SyntaxTree;
 
 namespace OpenRasta.Codecs.Razor
@@ -17,20 +19,12 @@ namespace OpenRasta.Codecs.Razor
     [BuildProviderAppliesTo(BuildProviderAppliesTo.Web | BuildProviderAppliesTo.Code)]
     public class OpenRastaRazorBuildProvider : BuildProvider
     {
-        public static event EventHandler<CodeGenerationCompleteEventArgs> CodeGenerationCompleted;
-        public static event EventHandler CodeGenerationStarted;
-
-        // For unit testing
-        private event EventHandler<CodeGenerationCompleteEventArgs> _codeGenerationCompletedInternal;
-        private event EventHandler _codeGenerationStartedInternal;
-
         private static bool? _isFullTrust;
-        private CodeCompileUnit _generatedCode = null;
-        private OpenRastaRazorHost _host = null;
-        private IList _virtualPathDependencies;
-        private AssemblyBuilder _assemblyBuilder;
+        private CodeCompileUnit _generatedCode;
+        private OpenRastaRazorHost _host;
+        private string _physicalPath;
 
-        internal OpenRastaRazorHost Host
+        private OpenRastaRazorHost Host
         {
             get
             {
@@ -40,61 +34,37 @@ namespace OpenRasta.Codecs.Razor
                 }
                 return _host;
             }
-            set { _host = value; }
         }
 
-        // Returns the base dependencies and any dependencies added via AddVirtualPathDependencies
-        public override ICollection VirtualPathDependencies
+        public string PhysicalPath
         {
             get
             {
-                if (_virtualPathDependencies != null)
+                MapPhysicalPath();
+                return _physicalPath;
+            }
+            set { _physicalPath = value; }
+        }
+
+        private void MapPhysicalPath()
+        {
+            if (_physicalPath == null && HostingEnvironment.IsHosted)
+            {
+                string path = HostingEnvironment.MapPath(VirtualPath);
+                if (!String.IsNullOrEmpty(path) && File.Exists(path))
                 {
-                    // Return a readonly wrapper so as to prevent users from modifying the collection directly.
-                    return ArrayList.ReadOnly(_virtualPathDependencies);
-                }
-                else
-                {
-                    return base.VirtualPathDependencies;
+                    _physicalPath = path;
                 }
             }
         }
 
-        public void AddVirtualPathDependency(string dependency)
-        {
-            if (_virtualPathDependencies == null)
-            {
-                // Initialize the collection containing the base dependencies
-                _virtualPathDependencies = new ArrayList(base.VirtualPathDependencies);
-            }
-
-            _virtualPathDependencies.Add(dependency);
-        }
-
-        public new string VirtualPath
-        {
-            get
-            {
-                return base.VirtualPath;
-            }
-        }
-
-        public AssemblyBuilder AssemblyBuilder
-        {
-            get
-            {
-                return _assemblyBuilder;
-            }
-        }
-
-        internal CodeCompileUnit GeneratedCode
+        private CodeCompileUnit GeneratedCode
         {
             get
             {
                 EnsureGeneratedCode();
                 return _generatedCode;
             }
-            set { _generatedCode = value; }
         }
 
         public override CompilerType CodeCompilerType
@@ -117,64 +87,58 @@ namespace OpenRasta.Codecs.Razor
                 }
                 return compilerType;
             }
-        }
-
-        internal event EventHandler<CodeGenerationCompleteEventArgs> CodeGenerationCompletedInternal
-        {
-            add { _codeGenerationCompletedInternal += value; }
-            remove { _codeGenerationCompletedInternal -= value; }
-        }
-
-        // For unit testing
-        internal event EventHandler CodeGenerationStartedInternal
-        {
-            add { _codeGenerationStartedInternal += value; }
-            remove { _codeGenerationStartedInternal -= value; }
-        }
+        }        
 
         public override Type GetGeneratedType(CompilerResults results)
         {
-            return results.CompiledAssembly.GetType(String.Format(CultureInfo.CurrentCulture, "{0}.{1}", Host.DefaultNamespace, Host.DefaultClassName));
+            return results.CompiledAssembly.GetType(String.Format(CultureInfo.CurrentCulture, "{0}.{1}", Host.DefaultNamespace, GetClassName()));
         }
 
         public override void GenerateCode(AssemblyBuilder assemblyBuilder)
         {
-            GenerateCodeCore(assemblyBuilder);
-        }
-
-        internal virtual void GenerateCodeCore(AssemblyBuilder assemblyBuilder)
-        {
-            OnCodeGenerationStarted(assemblyBuilder);
             assemblyBuilder.AddCodeCompileUnit(this, GeneratedCode);
         }
 
-        protected internal virtual TextReader InternalOpenReader()
+        private OpenRastaRazorHost CreateHost()
         {
-            return OpenReader();
-        }
+            return OpenRastaRazorHostFactory.CreateHost(GetCodeLanguage());
+        }        
 
-        protected internal virtual OpenRastaRazorHost CreateHost()
+        private RazorCodeLanguage GetCodeLanguage()
         {
-            return OpenRastaRazorHostFactory.CreateHost(VirtualPath);
-        }
-
-        private void OnCodeGenerationStarted(AssemblyBuilder assemblyBuilder)
-        {
-            _assemblyBuilder = assemblyBuilder;
-            EventHandler handler = _codeGenerationStartedInternal ?? CodeGenerationStarted;
-            if (handler != null)
+            RazorCodeLanguage language = DetermineCodeLanguage(VirtualPath);
+            if (language == null && !String.IsNullOrEmpty(PhysicalPath))
             {
-                handler(this, null);
+                language = DetermineCodeLanguage(PhysicalPath);
             }
+
+            if (language == null)
+            {
+                throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, "Could not determine the code language for '{0}'", VirtualPath));
+            }
+
+            return language;
         }
 
-        private void OnCodeGenerationCompleted(CodeCompileUnit generatedCode)
+        private static RazorCodeLanguage DetermineCodeLanguage(string fileName)
         {
-            EventHandler<CodeGenerationCompleteEventArgs> handler = _codeGenerationCompletedInternal ?? CodeGenerationCompleted;
-            if (handler != null)
+            string extension = Path.GetExtension(fileName);
+
+            // Use an if rather than else-if just in case Path.GetExtension returns null for some reason
+            if (String.IsNullOrEmpty(extension))
             {
-                handler(this, new CodeGenerationCompleteEventArgs(Host.VirtualPath, Host.PhysicalPath, generatedCode));
+                return null;
             }
+            if (extension[0] == '.')
+            {
+                extension = extension.Substring(1); // Trim off the dot
+            }
+
+            // Look up the language
+            // At the moment this only deals with code languages: cs, vb, etc., but in theory we could have MarkupLanguageServices which allow for
+            // interesting combinations like: vbcss, csxml, etc.
+            RazorCodeLanguage language = RazorCodeLanguage.GetLanguageByExtension(extension);
+            return language;
         }
 
         private void EnsureGeneratedCode()
@@ -183,19 +147,21 @@ namespace OpenRasta.Codecs.Razor
             {
                 var engine = new RazorTemplateEngine(Host);
                 GeneratorResults results;
-                using (TextReader reader = InternalOpenReader())
+                using (TextReader reader = OpenReader())
                 {
-                    results = engine.GenerateCode(reader);
+                    results = engine.GenerateCode(reader, GetClassName(), Host.DefaultNamespace, null);
                 }
                 if (!results.Success)
                 {
                     throw CreateExceptionFromParserError(results.ParserErrors.Last(), VirtualPath);
                 }
                 _generatedCode = results.GeneratedCode;
-
-                // Run the code gen complete event
-                OnCodeGenerationCompleted(_generatedCode);
             }
+        }
+
+        private string GetClassName()
+        {
+            return ParserHelpers.SanitizeClassName(Path.GetFileName(VirtualPath));
         }
 
         private static HttpParseException CreateExceptionFromParserError(RazorError error, string virtualPath)
