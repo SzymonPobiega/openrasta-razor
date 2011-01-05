@@ -31,8 +31,18 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="OpenRasta">
+      <HintPath>..\..\lib\openrasta\OpenRasta.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenRasta.DI.Windsor">
+      <HintPath>..\..\lib\openrasta\OpenRasta.DI.Windsor.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenRasta.Hosting.AspNet">
+      <HintPath>..\..\lib\openrasta\OpenRasta.Hosting.AspNet.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Web.Razor, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\..\..\..\Program Files\Microsoft ASP.NET\ASP.NET Web Pages\v1.0\Assemblies\System.Web.Razor.dll</HintPath>
@@ -52,8 +62,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="OpenRastaRazorBuildProvider.cs" />
+    <Compile Include="OpenRastaRazorHostFactory.cs" />
+    <Compile Include="OpenRastaCSharpRazorCodeGenerator.cs" />
+    <Compile Include="OpenRastaCSharpRazorCodeParser.cs" />
+    <Compile Include="OpenRastaRazorHost.cs" />
     <Compile Include="RazorCodec.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RazorConfigurationExtensions.cs" />
+    <Compile Include="RazorViewBase.cs" />
+    <Compile Include="ResourceSpan.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
