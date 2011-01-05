@@ -78,7 +78,7 @@
     <Compile Include="Resources\TestResource.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\src\OpenRasta.Codecs.Razor\OpenRasta.Codecs.Razor.csproj">
+    <ProjectReference Include="..\OpenRasta.Codecs.Razor\OpenRasta.Codecs.Razor.csproj">
       <Project>{4AAB667E-3478-4794-940D-8AA028D586F6}</Project>
       <Name>OpenRasta.Codecs.Razor</Name>
     </ProjectReference>
