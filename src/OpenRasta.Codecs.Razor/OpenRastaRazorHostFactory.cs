@@ -6,9 +6,9 @@ namespace OpenRasta.Codecs.Razor
 {
     public class OpenRastaRazorHostFactory
     {
-        public static OpenRastaRazorHost CreateHost(string virtualPath, string physicalPath = null)
+        public static OpenRastaRazorHost CreateHost(RazorCodeLanguage codeLanguage)
         {
-            return new OpenRastaRazorHost(virtualPath, physicalPath);
+            return new OpenRastaRazorHost(codeLanguage);
         }
     }
 }

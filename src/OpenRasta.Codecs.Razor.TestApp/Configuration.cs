@@ -9,7 +9,7 @@ namespace OpenRasta.Codecs.Razor.TestApp
         public void Configure()
         {
             using (OpenRastaConfiguration.Manual)
-            {
+            {                
                 ResourceSpace.Has.ResourcesOfType<TestResource>()
                     .AtUri("/home")
                     .And.AtUri("/")

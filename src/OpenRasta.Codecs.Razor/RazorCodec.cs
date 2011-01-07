@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Web.Compilation;
+using System.Web.Hosting;
 using OpenRasta.Collections.Specialized;
 using OpenRasta.DI;
 using OpenRasta.IO;
@@ -18,11 +19,22 @@ namespace OpenRasta.Codecs.Razor
     {
         private static readonly string[] DEFAULT_VIEW_NAMES = new[] { "index", "default", "view", "get" };
         private readonly IRequest _request;
+        private readonly IBuildManager _buildManager;
         private IDictionary<string, string> _configuration;
 
         public RazorCodec(IRequest request)
         {
             _request = request;
+            _buildManager = CreateBuildManager();
+        }
+
+        private static IBuildManager CreateBuildManager()
+        {
+            if (HostingEnvironment.IsHosted)
+            {
+                return new AspNetBuildManager();
+            }
+            return new StandAloneBuildManager(DependencyManager.GetService<IViewProvider>());
         }
 
         public object Configuration
@@ -51,7 +63,7 @@ namespace OpenRasta.Codecs.Razor
 
             string templateAddress = GetViewVPath(_configuration, codecParameterList.ToArray(), _request.UriName);
 
-            var type = BuildManager.GetCompiledType(templateAddress);
+            var type = _buildManager.GetCompiledType(templateAddress);
 
             var renderTarget = DependencyManager.GetService(type) as RazorViewBase;
 
